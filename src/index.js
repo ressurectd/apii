@@ -80,13 +80,25 @@ async function fetchLastfm(url, ttl, ctx) {
     cache = null; // caches.default unavailable (e.g. some local setups)
   }
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "apii.uk (+https://apii.uk)" },
-    cf: { cacheTtl: ttl, cacheEverything: true },
-  });
-  if (!res.ok) throw new Error("lastfm http " + res.status);
+  // One retry smooths over the occasional transient blip / rate-limit.
+  let body;
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "apii.uk (+https://apii.uk)" },
+        cf: { cacheTtl: ttl, cacheEverything: true },
+      });
+      if (!res.ok) throw new Error("lastfm http " + res.status);
+      body = await res.text();
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  if (body == null) throw lastErr || new Error("lastfm fetch failed");
 
-  const body = await res.text();
   const data = JSON.parse(body);
   if (data && data.error) throw new Error("lastfm " + data.error);
 
@@ -128,8 +140,16 @@ async function renderSongs(env, ctx) {
     artists: parseTop(val(artists), "artist", "topartists"),
     tracks: parseTop(val(tracks), "track", "toptracks"),
     albums: parseTop(val(albums), "album", "topalbums"),
-    error: recent.status === "rejected" && info.status === "rejected" ? "unavailable" : null,
   };
+
+  // Only declare the whole page "unavailable" when nothing at all loaded —
+  // otherwise render every section that did come back.
+  model.error =
+    !model.listening &&
+    model.scrobbles == null &&
+    !model.artists.length &&
+    !model.tracks.length &&
+    !model.albums.length;
 
   return htmlResponse(songsPage(model), 200);
 }
@@ -284,7 +304,7 @@ function barChart(items) {
 
 function songsPage(model) {
   const body =
-    model.error && !model.listening && !model.scrobbles
+    model.error
       ? '<p class="err">last.fm is unavailable right now. refresh in a moment.</p>'
       : [
           "<section>" + nowBlock(model.listening) +
