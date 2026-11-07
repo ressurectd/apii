@@ -43,22 +43,8 @@ In production the site is chosen by hostname and `?site=` is ignored.
 
 ## Last.fm API key
 
-Public listening data only — no shared secret required.
-
-- **Local:** the key lives in `.dev.vars` (gitignored) as:
-
-  ```
-  LASTFM_API_KEY=your_key_here
-  ```
-
-- **Production:** store it as a Worker secret:
-
-  ```sh
-  npx wrangler secret put LASTFM_API_KEY
-  ```
-
-The key is read from `env.LASTFM_API_KEY` and used only in server-side fetches.
-It is never hardcoded, logged, or sent to the browser.
+The key lives in `src/index.js` as `LASTFM_API_KEY` and is used only in
+server-side fetches — never sent to the browser.
 
 Recent listening + scrobble count are cached ~60s; all-time rankings ~1h.
 

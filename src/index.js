@@ -12,6 +12,8 @@
 const LASTFM_USER = "be_m";
 const API = "https://ws.audioscrobbler.com/2.0/";
 
+const LASTFM_API_KEY = "b2fd6b9b255b713fb9823aadd3d3955b";
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -28,7 +30,7 @@ export default {
     const site = resolveSite(url, env);
 
     if (site === "songs") {
-      return renderSongs(env, ctx);
+      return renderSongs(ctx);
     }
 
     // apii + socials are static documents in ./public
@@ -116,11 +118,8 @@ async function fetchLastfm(url, ttl, ctx) {
   return data;
 }
 
-async function renderSongs(env, ctx) {
-  const key = env.LASTFM_API_KEY;
-  if (!key) {
-    return htmlResponse(songsPage({ error: true, reason: "no-key" }), 200);
-  }
+async function renderSongs(ctx) {
+  const key = LASTFM_API_KEY;
 
   const RECENT_TTL = 60; // now-playing + recent
   const INFO_TTL = 60; // scrobble total
