@@ -1,0 +1,33 @@
+name = "apii"
+main = "src/index.js"
+compatibility_date = "2024-11-06"
+
+# Static assets (fonts, css, globe, static html) live in ./public.
+# The Worker runs first so it can route by hostname and server-render songs.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
+# Production hostnames — one Worker, three custom domains.
+# These require the apii.uk zone to exist on your Cloudflare account.
+[[routes]]
+pattern = "apii.uk"
+custom_domain = true
+
+[[routes]]
+pattern = "socials.apii.uk"
+custom_domain = true
+
+[[routes]]
+pattern = "songs.apii.uk"
+custom_domain = true
+
+[observability]
+enabled = true
+
+# LASTFM_API_KEY is provided via:
+#   - local:      .dev.vars  (gitignored)
+#   - production: npx wrangler secret put LASTFM_API_KEY

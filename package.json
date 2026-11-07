@@ -1,0 +1,15 @@
+{
+  "name": "apii",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal site across apii.uk, socials.apii.uk and songs.apii.uk — one Cloudflare Worker.",
+  "scripts": {
+    "dev": "wrangler dev --var DEV:true",
+    "deploy": "wrangler deploy",
+    "secret": "wrangler secret put LASTFM_API_KEY",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

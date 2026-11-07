@@ -1,0 +1,342 @@
+/* ------------------------------------------------------------------ *
+ *  apii — shared styles
+ *  Self-hosted fonts (OFL). Minimal, semantic, no framework.
+ * ------------------------------------------------------------------ */
+
+@font-face {
+  font-family: "Redaction 35";
+  src: url("/fonts/redaction-35-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Redaction 35";
+  src: url("/fonts/redaction-35-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Libre Barcode 39 Text";
+  src: url("/fonts/libre-barcode-39-text-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ink:        #c4cdca;   /* soft, faintly cool off-white            */
+  --ink-dim:    #7f8c89;   /* recessed text                           */
+  --ink-bright: #eef3f1;   /* hover / emphasis                        */
+  --rule:       rgba(196, 205, 202, 0.14);
+  --measure:    30rem;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100svh;
+  color: var(--ink);
+  font-family: "Redaction 35", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-size: clamp(1rem, 0.9rem + 0.5vw, 1.2rem);
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  /* Black-to-muted-teal: teal pools low and off-centre, fading to pure
+     black up and to the left — composed, not a flat diagonal wash.      */
+  background-color: #000;
+  background-image:
+    radial-gradient(135% 115% at 68% 118%,
+      #4d8f8f 0%,
+      #2f6060 22%,
+      #123030 46%,
+      #060f0f 68%,
+      #000000 100%);
+  background-attachment: fixed;
+}
+
+/* Links — understated, lowercase, restrained hover. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(77, 143, 143, 0.35);
+  color: var(--ink-bright);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Barcode identity — "api.i"
+ * ------------------------------------------------------------------ */
+.mark {
+  font-family: "Libre Barcode 39 Text", "Redaction 35", monospace;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: auto;
+  user-select: none;
+}
+
+/* ================================================================== *
+ *  apii.uk — the two links over the globe
+ * ================================================================== */
+.home {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  overflow: hidden;
+}
+
+#globe {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.home nav {
+  position: relative;
+  z-index: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
+}
+
+.home nav a {
+  font-size: clamp(1.9rem, 1.3rem + 2.6vw, 3rem);
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  color: var(--ink);
+  opacity: 0.92;
+  transition: opacity 320ms ease, letter-spacing 320ms ease, color 320ms ease;
+}
+.home nav a:hover,
+.home nav a:focus-visible {
+  opacity: 1;
+  color: var(--ink-bright);
+  letter-spacing: 0.1em;
+}
+.home nav a:focus-visible {
+  outline: 1px solid var(--rule);
+  outline-offset: 0.5rem;
+}
+
+.home .mark {
+  position: relative;
+  z-index: 1;
+  grid-row: 2;
+  justify-self: center;
+  font-size: 2rem;
+  padding-bottom: clamp(1.4rem, 4vh, 2.8rem);
+  opacity: 0.6;
+}
+
+/* ================================================================== *
+ *  socials.apii.uk & songs.apii.uk — centred narrow column
+ * ================================================================== */
+.sheet {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1.5rem;
+}
+
+.column {
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+/* --- socials --- */
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+.stack a {
+  font-size: clamp(1.6rem, 1.2rem + 1.8vw, 2.4rem);
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+  transition: opacity 320ms ease, letter-spacing 320ms ease, color 320ms ease;
+}
+.stack a:hover,
+.stack a:focus-visible {
+  opacity: 1;
+  color: var(--ink-bright);
+  letter-spacing: 0.09em;
+}
+.stack a:focus-visible {
+  outline: 1px solid var(--rule);
+  outline-offset: 0.5rem;
+}
+
+/* home link / mark at foot of socials + songs */
+.foot {
+  margin-top: 3.5rem;
+  text-align: center;
+}
+.foot .mark {
+  font-size: 1.6rem;
+  opacity: 0.5;
+  transition: opacity 320ms ease, color 320ms ease;
+}
+a.foot:hover .mark,
+.foot a:hover .mark,
+.foot a:focus-visible .mark {
+  opacity: 0.85;
+  color: var(--ink);
+}
+
+/* ================================================================== *
+ *  songs.apii.uk
+ * ================================================================== */
+.songs .column { max-width: 26rem; }
+
+.songs section { margin: 0 0 2.75rem; }
+.songs section:last-of-type { margin-bottom: 0; }
+
+.songs h2 {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.now {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: var(--ink-bright);
+}
+.now .artist { color: var(--ink); }
+.now .album {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1rem;
+  color: var(--ink-dim);
+}
+.state {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.pulse { color: #8fd0c8; }
+
+.scrobbles {
+  margin-top: 0.9rem;
+  font-size: 1rem;
+  color: var(--ink-dim);
+}
+.scrobbles b {
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* ranked / previous lists */
+.ranks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ranks li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--rule);
+}
+.ranks li:first-child { border-top: 0; }
+.ranks .name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ranks .name small {
+  color: var(--ink-dim);
+  font-size: 0.8em;
+}
+.ranks .count {
+  flex: none;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+/* CSS-only bar chart for top artists */
+.chart {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chart li {
+  padding: 0.5rem 0;
+}
+.chart .row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+.chart .name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart .count {
+  flex: none;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+.chart .bar {
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, #4d8f8f, #8fd0c8);
+  opacity: 0.75;
+}
+
+.err {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+/* ================================================================== *
+ *  Reduced motion — the globe holds a single still frame (set in JS).
+ * ================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto; }
+}
