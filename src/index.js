@@ -171,9 +171,59 @@ async function renderSongs(ctx) {
       (s) => s.status === "rejected"
     );
     model.reason = "api-" + (first && first.reason ? String(first.reason.message || first.reason) : "fail");
+  } else {
+    await attachGenres(model, ctx);
   }
 
   return htmlResponse(songsPage(model), 200);
+}
+
+/* Genre comes from Last.fm tags, which hang off artists. Fetch the top tag
+   once per unique artist (cached ~a day) and reuse it for that artist's
+   tracks and albums. Best-effort: a missing tag just omits the genre. */
+const TAG_JUNK = /seen live|favou?rite|owned|i own|spotify|listeners|wishlist|check out|vocalist/i;
+
+function pickGenre(tags) {
+  for (const t of asArray(tags)) {
+    const n = text(t && t.name);
+    if (n && !TAG_JUNK.test(n)) return n.toLowerCase();
+  }
+  return "";
+}
+
+async function attachGenres(model, ctx) {
+  const names = [];
+  const cur = model.listening && model.listening.current;
+  if (cur) names.push(cur.artist);
+  model.artists.forEach((a) => names.push(a.name));
+  model.tracks.forEach((t) => names.push(t.artist));
+  model.albums.forEach((a) => names.push(a.artist));
+
+  const uniq = [...new Set(names.map(text).filter(Boolean))];
+  if (!uniq.length) return;
+
+  const res = await Promise.allSettled(
+    uniq.map((n) =>
+      fetchLastfm(
+        endpoint("artist.getTopTags", LASTFM_API_KEY, { artist: n, autocorrect: "1" }),
+        86400,
+        ctx
+      )
+    )
+  );
+  const map = new Map();
+  res.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      const g = pickGenre(r.value && r.value.toptags && r.value.toptags.tag);
+      if (g) map.set(uniq[i], g);
+    }
+  });
+
+  const g = (n) => map.get(text(n)) || "";
+  if (cur) cur.genre = g(cur.artist);
+  model.artists.forEach((a) => (a.genre = g(a.name)));
+  model.tracks.forEach((t) => (t.genre = g(t.artist)));
+  model.albums.forEach((a) => (a.genre = g(a.artist)));
 }
 
 /* ------------------------------------------------------------------ *
@@ -362,6 +412,12 @@ function link(url, inner, cls) {
     : "<span" + c + ">" + inner + "</span>";
 }
 
+// The dim "artist · genre" sub-label beside a name (either part optional).
+function sub(parts) {
+  const kept = parts.filter(Boolean).map(esc);
+  return kept.length ? ' <small>' + kept.join(" · ") + "</small>" : "";
+}
+
 function coverImg(listening) {
   const c = listening && listening.current;
   if (!c || !c.cover) return "";
@@ -383,7 +439,13 @@ function nowBlock(listening) {
     ? '<span class="state pulse">listening now ' + eq + "</span>"
     : '<span class="state">last played</span>';
   const title = link(c.url, esc(c.name || "—"));
-  const album = c.album ? '<span class="album">' + esc(c.album) + "</span>" : "";
+  const albumLine = c.album || c.genre
+    ? '<span class="album">' +
+      esc(c.album || "") +
+      (c.album && c.genre ? " · " : "") +
+      (c.genre ? '<span class="genre">' + esc(c.genre) + "</span>" : "") +
+      "</span>"
+    : "";
   return (
     state +
     '<p class="now">' +
@@ -391,7 +453,7 @@ function nowBlock(listening) {
     '<span class="artist">' +
     esc(c.artist || "") +
     "</span>" +
-    album +
+    albumLine +
     "</p>"
   );
 }
@@ -423,8 +485,7 @@ function rankList(items, withArtist) {
           "<li>" +
           link(
             it.url,
-            esc(it.name) +
-              (withArtist && it.artist ? " <small>" + esc(it.artist) + "</small>" : ""),
+            esc(it.name) + sub([withArtist ? it.artist : "", it.genre]),
             "name"
           ) +
           '<span class="count">' +
@@ -446,7 +507,7 @@ function barChart(items) {
         const pct = Math.max(3, Math.round((it.count / max) * 100));
         return (
           '<li><div class="row">' +
-          link(it.url, esc(it.name), "name") +
+          link(it.url, esc(it.name) + sub([it.genre]), "name") +
           '<span class="count">' +
           fmt(it.count) +
           '</span></div><span class="bar" style="width:' +

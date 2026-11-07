@@ -482,6 +482,10 @@ a.foot:hover .mark,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.chart .name small {
+  color: var(--ink-dim);
+  font-size: 0.8em;
+}
 .chart .count {
   flex: none;
   color: var(--ink-dim);
