@@ -45,6 +45,7 @@ export default {
     }
 
     if (site === "songs") {
+      if (path === "/now.json") return liveNow(ctx);
       return renderSongs(ctx);
     }
 
@@ -176,6 +177,46 @@ async function renderSongs(ctx) {
   }
 
   return htmlResponse(songsPage(model), 200);
+}
+
+/* Lightweight JSON for the client poller: just the live regions (now-playing
+   + scrobbles + previous). Returns inner HTML so the browser swaps markup
+   that's identical to the server-rendered page. */
+async function liveNow(ctx) {
+  const [recent, info] = await Promise.allSettled([
+    fetchLastfm(endpoint("user.getRecentTracks", LASTFM_API_KEY, { limit: "5" }), 30, ctx),
+    fetchLastfm(endpoint("user.getInfo", LASTFM_API_KEY), 30, ctx),
+  ]);
+
+  const model = {
+    listening: parseRecent(val(recent)),
+    scrobbles: parseScrobbles(val(info)),
+  };
+
+  // genre for the current artist only (cached ~a day)
+  const cur = model.listening && model.listening.current;
+  if (cur && cur.artist) {
+    try {
+      const d = await fetchLastfm(
+        endpoint("artist.getTopTags", LASTFM_API_KEY, { artist: cur.artist, autocorrect: "1" }),
+        86400,
+        ctx
+      );
+      cur.genre = pickGenre(d && d.toptags && d.toptags.tag);
+    } catch (_) { /* no genre */ }
+  }
+
+  const payload = JSON.stringify({
+    top: topInner(model),
+    prev: prevInner(model),
+    playing: !!(model.listening && model.listening.nowplaying),
+  });
+  return new Response(payload, {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=0, s-maxage=20",
+    },
+  });
 }
 
 /* Genre comes from Last.fm tags, which hang off artists. Fetch the top tag
@@ -520,34 +561,42 @@ function barChart(items) {
   );
 }
 
-function songsPage(model) {
-  // Invisible marker so the failure mode can be diagnosed from the live page.
-  const diag = model.error ? "\n<!-- songs:" + (model.reason || "error") + " -->" : "";
-
+// Inner markup of the live regions — shared by the full page and the poller
+// endpoint so updates swap in seamlessly.
+function topInner(model) {
   const scrobbles =
     model.scrobbles != null
       ? '<p class="scrobbles"><b>' + fmt(model.scrobbles) + "</b> scrobbles</p>"
       : "";
-  const profile =
+  const links =
     '<span class="links">' +
     '<a class="profile" href="' + PROFILE_URL + '" rel="me noopener">' +
     LASTFM_USER + " on last.fm</a>" +
     '<a class="profile feed" href="/rss">rss</a>' +
     "</span>";
+  return (
+    coverImg(model.listening) +
+    '<div class="nowtext">' + nowBlock(model.listening) + "</div>" +
+    '<div class="meta">' + scrobbles + links + "</div>"
+  );
+}
+function prevInner(model) {
+  return "<h2>previous</h2>" + previousList(model.listening);
+}
+
+function songsPage(model) {
+  // Invisible marker so the failure mode can be diagnosed from the live page.
+  const diag = model.error ? "\n<!-- songs:" + (model.reason || "error") + " -->" : "";
 
   const body = model.error
     ? '<div class="dash dash-error"><p class="err">last.fm is unavailable right now. refresh in a moment.</p></div>'
     : '<main class="dash">' +
-      '<header class="top">' +
-      coverImg(model.listening) +
-      '<div class="nowtext">' + nowBlock(model.listening) + "</div>" +
-      '<div class="meta">' + scrobbles + profile + "</div>" +
-      "</header>" +
+      '<header class="top">' + topInner(model) + "</header>" +
       '<section class="col col-artists"><h2>artists</h2>' + barChart(model.artists) + "</section>" +
       '<section class="col col-tracks"><h2>tracks</h2>' + rankList(model.tracks, true) + "</section>" +
       '<section class="col col-albums"><h2>albums</h2>' + rankList(model.albums, true) + "</section>" +
       '<footer class="bottom">' +
-      '<section class="prev"><h2>previous</h2>' + previousList(model.listening) + "</section>" +
+      '<section class="prev">' + prevInner(model) + "</section>" +
       '<a class="back" href="https://apii.uk" aria-label="home"><span class="mark">api.i</span></a>' +
       "</footer>" +
       "</main>";
@@ -565,6 +614,7 @@ function songsPage(model) {
     '<link rel="stylesheet" href="/assets/style.css">' +
     "</head><body class=\"songs\">" +
     body +
+    (model.error ? "" : '<script src="/assets/now.js" defer></script>') +
     "</body></html>"
   );
 }

@@ -11,8 +11,11 @@ One Cloudflare Worker serving three hostnames:
 Every subdomain exposes an RSS feed at `/rss` (and `/feed.xml`): apii.uk lists its
 two destinations, socials lists the account links, songs serves recent scrobbles.
 
-No framework, no database, no analytics, no cookies, no client-side music JS.
-The only JavaScript that ships is the globe (`public/assets/globe.js`).
+No framework, no database, no analytics, no cookies. Two small scripts ship:
+the WebGL globe (`public/assets/globe.js`) and a ~1 KB poller
+(`public/assets/now.js`) that live-refreshes the now-playing block on
+`songs.apii.uk` every 20s via `/now.json` — progressive enhancement over the
+fully server-rendered page.
 
 ## Layout
 
@@ -20,7 +23,7 @@ The only JavaScript that ships is the globe (`public/assets/globe.js`).
 public/            static assets (served via the ASSETS binding)
   apii.html        globe page
   socials.html     links page
-  assets/          style.css, globe.js
+  assets/          style.css, globe.js, now.js
   fonts/           Redaction 35 + Libre Barcode 39 Text (self-hosted, OFL)
 src/index.js       Worker: hostname routing + songs server-render
 wrangler.toml      config (assets binding, three custom-domain routes)
