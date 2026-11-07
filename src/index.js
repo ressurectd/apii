@@ -14,6 +14,12 @@ const API = "https://ws.audioscrobbler.com/2.0/";
 const PROFILE_URL = "https://www.last.fm/user/be_m";
 const IMG_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f"; // Last.fm "no art" star
 
+const SOCIALS = [
+  { name: "discord", url: "https://discord.com/users/1562529389906886719" },
+  { name: "github", url: "https://github.com/ressurectd" },
+  { name: "spotify", url: "https://open.spotify.com/user/yv4if8jl1tqqh05i8an54k9th" },
+];
+
 const LASTFM_API_KEY = "b2fd6b9b255b713fb9823aadd3d3955b";
 
 export default {
@@ -31,10 +37,14 @@ export default {
 
     const site = resolveSite(url, env);
 
+    // Each subdomain exposes its own RSS feed.
+    if (path === "/rss" || path === "/feed.xml") {
+      if (site === "songs") return songsFeed(ctx);
+      if (site === "socials") return socialsFeed();
+      return apiiFeed();
+    }
+
     if (site === "songs") {
-      if (path === "/rss" || path === "/feed.xml") {
-        return renderFeed(ctx);
-      }
       return renderSongs(ctx);
     }
 
@@ -166,8 +176,41 @@ async function renderSongs(ctx) {
   return htmlResponse(songsPage(model), 200);
 }
 
-/* RSS 2.0 feed of recent scrobbles. */
-async function renderFeed(ctx) {
+/* ------------------------------------------------------------------ *
+ *  RSS — one feed per subdomain
+ * ------------------------------------------------------------------ */
+function rssItem(it) {
+  return (
+    "<item>" +
+    "<title>" + esc(it.title) + "</title>" +
+    (it.link ? "<link>" + esc(it.link) + "</link>" : "") +
+    (it.link ? '<guid isPermaLink="true">' + esc(it.link) + "</guid>" : "") +
+    (it.description ? "<description>" + esc(it.description) + "</description>" : "") +
+    (it.date ? "<pubDate>" + it.date + "</pubDate>" : "") +
+    "</item>"
+  );
+}
+
+function rssResponse(ch, items, ttl) {
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>' +
+    "<title>" + esc(ch.title) + "</title>" +
+    "<link>" + esc(ch.link) + "</link>" +
+    "<description>" + esc(ch.description) + "</description>" +
+    '<atom:link href="' + esc(ch.link) + '/rss" rel="self" type="application/rss+xml"/>' +
+    items.map(rssItem).join("") +
+    "</channel></rss>";
+  return new Response(xml, {
+    headers: {
+      "Content-Type": "application/rss+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=0, s-maxage=" + (ttl || 300),
+    },
+  });
+}
+
+// songs.apii.uk/rss — recent scrobbles (dynamic).
+async function songsFeed(ctx) {
   let tracks = [];
   try {
     const data = await fetchLastfm(
@@ -189,38 +232,49 @@ async function renderFeed(ctx) {
 
   const items = tracks
     .filter((t) => !t.nowplaying) // only settled scrobbles get a feed entry
-    .map((t) => {
-      const title = esc(t.name + " — " + t.artist);
-      const date = t.uts ? new Date(t.uts * 1000).toUTCString() : "";
-      const desc = esc(t.album ? "from " + t.album : t.artist);
-      return (
-        "<item>" +
-        "<title>" + title + "</title>" +
-        (t.url ? "<link>" + esc(t.url) + "</link>" : "") +
-        (t.url ? '<guid isPermaLink="true">' + esc(t.url) + "</guid>" : "") +
-        "<description>" + desc + "</description>" +
-        (date ? "<pubDate>" + date + "</pubDate>" : "") +
-        "</item>"
-      );
-    })
-    .join("");
+    .map((t) => ({
+      title: t.name + " — " + t.artist,
+      link: t.url,
+      description: t.album ? "from " + t.album : t.artist,
+      date: t.uts ? new Date(t.uts * 1000).toUTCString() : "",
+    }));
 
-  const xml =
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<rss version="2.0"><channel>' +
-    "<title>" + LASTFM_USER + " — recent scrobbles</title>" +
-    "<link>https://songs.apii.uk</link>" +
-    "<description>What " + LASTFM_USER + " has been listening to, via Last.fm.</description>" +
-    '<atom:link xmlns:atom="http://www.w3.org/2005/Atom" href="https://songs.apii.uk/rss" rel="self" type="application/rss+xml"/>' +
-    items +
-    "</channel></rss>";
-
-  return new Response(xml, {
-    headers: {
-      "Content-Type": "application/rss+xml; charset=utf-8",
-      "Cache-Control": "public, max-age=0, s-maxage=60",
+  return rssResponse(
+    {
+      title: LASTFM_USER + " — recent scrobbles",
+      link: "https://songs.apii.uk",
+      description: "What " + LASTFM_USER + " has been listening to, via Last.fm.",
     },
-  });
+    items,
+    60
+  );
+}
+
+// apii.uk/rss — the two destinations (static).
+function apiiFeed() {
+  return rssResponse(
+    {
+      title: "apii",
+      link: "https://apii.uk",
+      description: "apii.uk",
+    },
+    [
+      { title: "accounts", link: "https://socials.apii.uk", description: "discord · github · spotify" },
+      { title: "songs", link: "https://songs.apii.uk", description: "what i'm listening to" },
+    ]
+  );
+}
+
+// socials.apii.uk/rss — the account links (static).
+function socialsFeed() {
+  return rssResponse(
+    {
+      title: "apii — accounts",
+      link: "https://socials.apii.uk",
+      description: "Where to find me.",
+    },
+    SOCIALS.map((s) => ({ title: s.name, link: s.url, description: s.name }))
+  );
 }
 
 function val(settled) {

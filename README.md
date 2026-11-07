@@ -6,7 +6,10 @@ One Cloudflare Worker serving three hostnames:
 | --- | --- |
 | `apii.uk` | Two centred links over a WebGL wireframe globe |
 | `socials.apii.uk` | Plain text links: discord · github · spotify |
-| `songs.apii.uk` | Server-rendered Last.fm dashboard (`be_m`) + `/rss` feed |
+| `songs.apii.uk` | Server-rendered Last.fm dashboard (`be_m`) |
+
+Every subdomain exposes an RSS feed at `/rss` (and `/feed.xml`): apii.uk lists its
+two destinations, socials lists the account links, songs serves recent scrobbles.
 
 No framework, no database, no analytics, no cookies, no client-side music JS.
 The only JavaScript that ships is the globe (`public/assets/globe.js`).
