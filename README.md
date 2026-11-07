@@ -6,7 +6,7 @@ One Cloudflare Worker serving three hostnames:
 | --- | --- |
 | `apii.uk` | Two centred links over a WebGL wireframe globe |
 | `socials.apii.uk` | Plain text links: discord · github · spotify |
-| `songs.apii.uk` | Server-rendered Last.fm listening page (`be_m`) |
+| `songs.apii.uk` | Server-rendered Last.fm dashboard (`be_m`) + `/rss` feed |
 
 No framework, no database, no analytics, no cookies, no client-side music JS.
 The only JavaScript that ships is the globe (`public/assets/globe.js`).
@@ -47,6 +47,8 @@ The key lives in `src/index.js` as `LASTFM_API_KEY` and is used only in
 server-side fetches — never sent to the browser.
 
 Recent listening + scrobble count are cached ~60s; all-time rankings ~1h.
+
+`songs.apii.uk/rss` (also `/feed.xml`) serves an RSS 2.0 feed of recent scrobbles.
 
 ## Deploy
 

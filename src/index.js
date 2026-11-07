@@ -11,6 +11,8 @@
 
 const LASTFM_USER = "be_m";
 const API = "https://ws.audioscrobbler.com/2.0/";
+const PROFILE_URL = "https://www.last.fm/user/be_m";
+const IMG_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f"; // Last.fm "no art" star
 
 const LASTFM_API_KEY = "b2fd6b9b255b713fb9823aadd3d3955b";
 
@@ -30,6 +32,9 @@ export default {
     const site = resolveSite(url, env);
 
     if (site === "songs") {
+      if (path === "/rss" || path === "/feed.xml") {
+        return renderFeed(ctx);
+      }
       return renderSongs(ctx);
     }
 
@@ -161,6 +166,63 @@ async function renderSongs(ctx) {
   return htmlResponse(songsPage(model), 200);
 }
 
+/* RSS 2.0 feed of recent scrobbles. */
+async function renderFeed(ctx) {
+  let tracks = [];
+  try {
+    const data = await fetchLastfm(
+      endpoint("user.getRecentTracks", LASTFM_API_KEY, { limit: "25" }),
+      60,
+      ctx
+    );
+    tracks = asArray(data && data.recenttracks && data.recenttracks.track).map((t) => ({
+      name: text(t.name),
+      artist: text(t.artist && (t.artist["#text"] || t.artist.name)),
+      album: text(t.album && (t.album["#text"] || t.album.name)),
+      url: text(t.url),
+      nowplaying: !!(t["@attr"] && t["@attr"].nowplaying === "true"),
+      uts: t.date && t.date.uts ? parseInt(t.date.uts, 10) : null,
+    }));
+  } catch (_) {
+    tracks = [];
+  }
+
+  const items = tracks
+    .filter((t) => !t.nowplaying) // only settled scrobbles get a feed entry
+    .map((t) => {
+      const title = esc(t.name + " — " + t.artist);
+      const date = t.uts ? new Date(t.uts * 1000).toUTCString() : "";
+      const desc = esc(t.album ? "from " + t.album : t.artist);
+      return (
+        "<item>" +
+        "<title>" + title + "</title>" +
+        (t.url ? "<link>" + esc(t.url) + "</link>" : "") +
+        (t.url ? '<guid isPermaLink="true">' + esc(t.url) + "</guid>" : "") +
+        "<description>" + desc + "</description>" +
+        (date ? "<pubDate>" + date + "</pubDate>" : "") +
+        "</item>"
+      );
+    })
+    .join("");
+
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<rss version="2.0"><channel>' +
+    "<title>" + LASTFM_USER + " — recent scrobbles</title>" +
+    "<link>https://songs.apii.uk</link>" +
+    "<description>What " + LASTFM_USER + " has been listening to, via Last.fm.</description>" +
+    '<atom:link xmlns:atom="http://www.w3.org/2005/Atom" href="https://songs.apii.uk/rss" rel="self" type="application/rss+xml"/>' +
+    items +
+    "</channel></rss>";
+
+  return new Response(xml, {
+    headers: {
+      "Content-Type": "application/rss+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=0, s-maxage=60",
+    },
+  });
+}
+
 function val(settled) {
   return settled && settled.status === "fulfilled" ? settled.value : null;
 }
@@ -171,6 +233,16 @@ function asArray(x) {
   return Array.isArray(x) ? x : [x];
 }
 
+// Largest usable image from a Last.fm image[] (ignores the "no art" star).
+function pickImage(images) {
+  let best = "";
+  for (const im of asArray(images)) {
+    const u = im && text(im["#text"]);
+    if (u) best = u; // array runs small -> extralarge, so keep the last
+  }
+  return best && best.indexOf(IMG_PLACEHOLDER) === -1 ? best : "";
+}
+
 function parseRecent(data) {
   const tracks = asArray(data && data.recenttracks && data.recenttracks.track);
   if (!tracks.length) return null;
@@ -179,6 +251,8 @@ function parseRecent(data) {
     name: text(t.name),
     artist: text(t.artist && (t.artist["#text"] || t.artist.name)),
     album: text(t.album && (t.album["#text"] || t.album.name)),
+    url: text(t.url),
+    cover: pickImage(t.image),
     nowplaying: !!(t["@attr"] && t["@attr"].nowplaying === "true"),
   }));
 
@@ -203,6 +277,7 @@ function parseTop(data, itemKey, rootKey) {
     .map((it) => ({
       name: text(it.name),
       artist: text(it.artist && (it.artist.name || it.artist["#text"])),
+      url: text(it.url),
       count: parseInt(it.playcount, 10) || 0,
     }))
     .filter((it) => it.name);
@@ -225,23 +300,41 @@ function fmt(n) {
   return n == null ? "" : n.toLocaleString("en-GB");
 }
 
+// Wrap text in a Last.fm link when a url is present, else a plain span.
+function link(url, inner, cls) {
+  const c = cls ? ' class="' + cls + '"' : "";
+  return url
+    ? '<a' + c + ' href="' + esc(url) + '" rel="noopener">' + inner + "</a>"
+    : "<span" + c + ">" + inner + "</span>";
+}
+
+function coverImg(listening) {
+  const c = listening && listening.current;
+  if (!c || !c.cover) return "";
+  const alt = c.album ? c.album + " cover" : "album cover";
+  return (
+    '<a class="cover" href="' + esc(c.url || PROFILE_URL) + '" rel="noopener">' +
+    '<img src="' + esc(c.cover) + '" alt="' + esc(alt) + '" loading="lazy" width="300" height="300">' +
+    "</a>"
+  );
+}
+
 function nowBlock(listening) {
   if (!listening || !listening.current) {
     return '<p class="err">nothing to show.</p>';
   }
   const c = listening.current;
-  const playing = listening.nowplaying;
-  const state = playing
-    ? '<span class="state pulse">listening now</span>'
+  const eq = '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>';
+  const state = listening.nowplaying
+    ? '<span class="state pulse">listening now ' + eq + "</span>"
     : '<span class="state">last played</span>';
-  const album = c.album
-    ? '<span class="album">' + esc(c.album) + "</span>"
-    : "";
+  const title = link(c.url, esc(c.name || "—"));
+  const album = c.album ? '<span class="album">' + esc(c.album) + "</span>" : "";
   return (
     state +
     '<p class="now">' +
-    esc(c.name || "—") +
-    '<br><span class="artist">' +
+    title +
+    '<span class="artist">' +
     esc(c.artist || "") +
     "</span>" +
     album +
@@ -249,21 +342,20 @@ function nowBlock(listening) {
   );
 }
 
-function previousBlock(listening) {
+function previousList(listening) {
   const prev = (listening && listening.previous) || [];
-  if (!prev.length) return "";
-  const items = prev
-    .map(
-      (t) =>
-        '<li><span class="name">' +
-        esc(t.name) +
-        " <small>" +
-        esc(t.artist) +
-        "</small></span></li>"
-    )
-    .join("");
+  if (!prev.length) return '<p class="err">—</p>';
   return (
-    "<section><h2>previous</h2><ul class=\"ranks\">" + items + "</ul></section>"
+    '<ul class="ranks">' +
+    prev
+      .map(
+        (t) =>
+          "<li>" +
+          link(t.url, esc(t.name) + " <small>" + esc(t.artist) + "</small>", "name") +
+          "</li>"
+      )
+      .join("") +
+    "</ul>"
   );
 }
 
@@ -274,10 +366,14 @@ function rankList(items, withArtist) {
     items
       .map(
         (it) =>
-          '<li><span class="name">' +
-          esc(it.name) +
-          (withArtist && it.artist ? " <small>" + esc(it.artist) + "</small>" : "") +
-          '</span><span class="count">' +
+          "<li>" +
+          link(
+            it.url,
+            esc(it.name) +
+              (withArtist && it.artist ? " <small>" + esc(it.artist) + "</small>" : ""),
+            "name"
+          ) +
+          '<span class="count">' +
           fmt(it.count) +
           "</span></li>"
       )
@@ -295,9 +391,9 @@ function barChart(items) {
       .map((it) => {
         const pct = Math.max(3, Math.round((it.count / max) * 100));
         return (
-          "<li><div class=\"row\"><span class=\"name\">" +
-          esc(it.name) +
-          '</span><span class="count">' +
+          '<li><div class="row">' +
+          link(it.url, esc(it.name), "name") +
+          '<span class="count">' +
           fmt(it.count) +
           '</span></div><span class="bar" style="width:' +
           pct +
@@ -312,20 +408,34 @@ function barChart(items) {
 function songsPage(model) {
   // Invisible marker so the failure mode can be diagnosed from the live page.
   const diag = model.error ? "\n<!-- songs:" + (model.reason || "error") + " -->" : "";
-  const body =
-    model.error
-      ? '<p class="err">last.fm is unavailable right now. refresh in a moment.</p>'
-      : [
-          "<section>" + nowBlock(model.listening) +
-            (model.scrobbles != null
-              ? '<p class="scrobbles"><b>' + fmt(model.scrobbles) + "</b> scrobbles</p>"
-              : "") +
-            "</section>",
-          previousBlock(model.listening),
-          "<section><h2>artists</h2>" + barChart(model.artists) + "</section>",
-          "<section><h2>tracks</h2>" + rankList(model.tracks, true) + "</section>",
-          "<section><h2>albums</h2>" + rankList(model.albums, true) + "</section>",
-        ].join("");
+
+  const scrobbles =
+    model.scrobbles != null
+      ? '<p class="scrobbles"><b>' + fmt(model.scrobbles) + "</b> scrobbles</p>"
+      : "";
+  const profile =
+    '<span class="links">' +
+    '<a class="profile" href="' + PROFILE_URL + '" rel="me noopener">' +
+    LASTFM_USER + " on last.fm</a>" +
+    '<a class="profile feed" href="/rss">rss</a>' +
+    "</span>";
+
+  const body = model.error
+    ? '<div class="dash dash-error"><p class="err">last.fm is unavailable right now. refresh in a moment.</p></div>'
+    : '<main class="dash">' +
+      '<header class="top">' +
+      coverImg(model.listening) +
+      '<div class="nowtext">' + nowBlock(model.listening) + "</div>" +
+      '<div class="meta">' + scrobbles + profile + "</div>" +
+      "</header>" +
+      '<section class="col col-artists"><h2>artists</h2>' + barChart(model.artists) + "</section>" +
+      '<section class="col col-tracks"><h2>tracks</h2>' + rankList(model.tracks, true) + "</section>" +
+      '<section class="col col-albums"><h2>albums</h2>' + rankList(model.albums, true) + "</section>" +
+      '<footer class="bottom">' +
+      '<section class="prev"><h2>previous</h2>' + previousList(model.listening) + "</section>" +
+      '<a class="back" href="https://apii.uk" aria-label="home"><span class="mark">api.i</span></a>' +
+      "</footer>" +
+      "</main>";
 
   return (
     "<!doctype html>" + diag + "\n" +
@@ -335,13 +445,12 @@ function songsPage(model) {
     "<title>songs — apii</title>" +
     '<meta name="description" content="what i\'m listening to">' +
     '<meta name="color-scheme" content="dark">' +
+    '<link rel="alternate" type="application/rss+xml" title="' + LASTFM_USER + ' — recent scrobbles" href="/rss">' +
     '<link rel="preload" href="/fonts/redaction-35-400.woff2" as="font" type="font/woff2" crossorigin>' +
     '<link rel="stylesheet" href="/assets/style.css">' +
     "</head><body class=\"songs\">" +
-    '<main class="sheet"><div class="column">' +
     body +
-    '<p class="foot"><a href="https://apii.uk" aria-label="home"><span class="mark">api.i</span></a></p>' +
-    "</div></main></body></html>"
+    "</body></html>"
   );
 }
 
