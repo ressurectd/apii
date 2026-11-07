@@ -119,7 +119,7 @@ async function fetchLastfm(url, ttl, ctx) {
 async function renderSongs(env, ctx) {
   const key = env.LASTFM_API_KEY;
   if (!key) {
-    return htmlResponse(songsPage({ error: "not configured" }), 200);
+    return htmlResponse(songsPage({ error: true, reason: "no-key" }), 200);
   }
 
   const RECENT_TTL = 60; // now-playing + recent
@@ -150,6 +150,14 @@ async function renderSongs(env, ctx) {
     !model.artists.length &&
     !model.tracks.length &&
     !model.albums.length;
+
+  if (model.error) {
+    // key is present but every call failed — note the first reason (invisible)
+    const first = [recent, info, artists, tracks, albums].find(
+      (s) => s.status === "rejected"
+    );
+    model.reason = "api-" + (first && first.reason ? String(first.reason.message || first.reason) : "fail");
+  }
 
   return htmlResponse(songsPage(model), 200);
 }
@@ -303,6 +311,8 @@ function barChart(items) {
 }
 
 function songsPage(model) {
+  // Invisible marker so the failure mode can be diagnosed from the live page.
+  const diag = model.error ? "\n<!-- songs:" + (model.reason || "error") + " -->" : "";
   const body =
     model.error
       ? '<p class="err">last.fm is unavailable right now. refresh in a moment.</p>'
@@ -319,7 +329,7 @@ function songsPage(model) {
         ].join("");
 
   return (
-    "<!doctype html>\n" +
+    "<!doctype html>" + diag + "\n" +
     '<html lang="en"><head>' +
     '<meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
